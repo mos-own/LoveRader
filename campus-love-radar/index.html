@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Campus Love Radar | 3D University Relationship Simulation</title>
+    <meta name="description" content="Explore a 3D university campus, practise communication and boundaries, and learn to recognise healthy and unhealthy relationship signals.">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js r128 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <style>
+        * { box-sizing: border-box; user-select: none; }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background-color: #0f172a;
+        }
+        #webgl-container {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            outline: none;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        
+        .hud-glass {
+            background: rgba(15, 23, 42, 0.82);
+            backdrop-filter: blur(18px) saturate(1.35);
+            -webkit-backdrop-filter: blur(18px) saturate(1.35);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            box-shadow: 0 14px 36px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255,255,255,0.08);
+        }
+        .hud-glass-light {
+            background: rgba(255, 255, 255, 0.94);
+            backdrop-filter: blur(20px) saturate(1.2);
+            -webkit-backdrop-filter: blur(20px) saturate(1.2);
+            border: 1px solid rgba(255, 255, 255, 0.85);
+            box-shadow: 0 24px 50px rgba(15, 23, 42, 0.28), 0 0 0 1px rgba(99, 102, 241, 0.06);
+        }
+
+        /* Rational Radar Overlay Tint */
+        #radar-vignette {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 5;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+            background: radial-gradient(circle at center, transparent 45%, rgba(14, 165, 233, 0.28) 100%);
+            box-shadow: inset 0 0 80px rgba(56, 189, 248, 0.4);
+        }
+        #radar-vignette.active {
+            opacity: 1;
+        }
+
+        /* Floating 3D HTML Labels */
+        .floating-3d-tag {
+            position: absolute;
+            transform: translate(-50%, -100%);
+            pointer-events: none;
+            z-index: 8;
+            transition: opacity 0.2s ease;
+            white-space: nowrap;
+        }
+
+        /* Animations */
+        @keyframes pulseRing {
+            0% { transform: scale(0.95); opacity: 0.9; }
+            50% { transform: scale(1.06); opacity: 1; }
+            100% { transform: scale(0.95); opacity: 0.9; }
+        }
+        .animate-pulse-slow {
+            animation: pulseRing 2.5s infinite ease-in-out;
+        }
+
+        @keyframes slideUpFade {
+            from { opacity: 0; transform: translateY(18px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-slide-up {
+            animation: slideUpFade 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        /* Custom Scrollbar for Report */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.2); }
+        ::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.5); border-radius: 9999px; }
+
+        /* Keycap styling */
+        .keycap {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 22px;
+            height: 22px;
+            padding: 0 5px;
+            font-size: 11px;
+            font-weight: 800;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.16);
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            border-bottom-width: 2px;
+            color: #f8fafc;
+        }
+
+
+        /* Clarity and accessibility upgrade */
+        :root { color-scheme: light; --brand:#6257e8; --ink:#172033; --muted:#64748b; }
+        button { -webkit-tap-highlight-color: transparent; }
+        button:focus-visible { outline: 3px solid #38bdf8 !important; outline-offset: 3px; }
+        .hud-glass { border-color: rgba(255,255,255,.22); }
+        .hud-glass-light { box-shadow: 0 28px 80px rgba(2,6,23,.32), 0 0 0 1px rgba(99,102,241,.08); }
+        #screen-title .hud-glass-light { max-width: 900px; padding: clamp(20px,3.2vw,36px); }
+        #screen-title h1 { letter-spacing: -.045em; }
+        #screen-title .gender-btn, #screen-title .orient-btn { min-height: 104px; text-align:left; }
+        #screen-title .gender-btn { text-align:center; }
+        #screen-title .gender-btn:hover, #screen-title .orient-btn:hover { transform: translateY(-2px); box-shadow: 0 12px 24px rgba(79,70,229,.10); }
+        #hud-layer { padding: clamp(8px,1.4vw,20px); gap: 10px; }
+        #hud-layer .hud-glass { box-shadow: 0 12px 32px rgba(2,6,23,.28); }
+        #hud-journey { width:min(520px, 100%); margin: 0 auto; }
+        .journey-step { display:flex; align-items:center; gap:7px; min-width:0; color:#cbd5e1; font-size:10px; font-weight:800; }
+        .journey-dot { width:22px; height:22px; flex:0 0 22px; display:grid; place-items:center; border-radius:50%; background:#334155; color:#cbd5e1; border:1px solid #64748b; }
+        .journey-step.active .journey-dot { background:#6366f1; border-color:#a5b4fc; color:white; box-shadow:0 0 0 4px rgba(99,102,241,.18); }
+        .journey-step.done .journey-dot { background:#059669; border-color:#6ee7b7; color:white; }
+        #dialogue-overlay { align-items:center; overflow-y:auto; }
+        #dialogue-overlay > div { max-height: min(92vh, 860px); overflow-y:auto; }
+        #dlg-choices-list > button { min-height:54px; text-align:left; line-height:1.45; }
+        #dlg-choices-list > button:hover { transform:translateY(-1px); box-shadow:0 8px 18px rgba(79,70,229,.10); }
+        #clue-modal > div { max-width:620px; }
+        #mobile-controls, #mobile-actions { display:none; }
+        @media (max-width: 760px) {
+            body, html { overflow:hidden; }
+            #screen-title { align-items:flex-start; overflow-y:auto; }
+            #screen-title .hud-glass-light { margin:auto 0; max-height:none; }
+            #screen-title h1 { font-size:clamp(26px,7vw,38px); }
+            #screen-title .space-y-5 { gap:14px; }
+            #screen-title .gender-btn, #screen-title .orient-btn { min-height:88px; padding:11px; }
+            #hud-layer { padding:8px; }
+            #hud-layer > .flex:first-child { gap:7px; }
+            #hud-layer > .flex:first-child > .hud-glass { max-width:100%; width:100%; }
+            #hud-layer > .flex:first-child > .flex { width:100%; align-items:stretch; }
+            #hud-layer > .flex:first-child > .flex > .hud-glass { justify-content:space-around; }
+            #hud-layer .text-\[10px\] { font-size:9px; }
+            #hud-quest-title { font-size:12px; }
+            #btn-radar-vision { flex:1; justify-content:center; min-height:38px; }
+            #hud-layer > .flex:last-child { align-items:flex-end; }
+            #hud-layer > .flex:last-child > .hud-glass:first-child { display:none; }
+            #minimap-canvas { width:92px; height:92px; }
+            #mobile-controls { display:grid; position:fixed; z-index:35; left:12px; bottom:14px; grid-template-columns:repeat(3,46px); grid-template-rows:repeat(2,46px); gap:5px; pointer-events:auto; }
+            #mobile-controls button { border:1px solid rgba(255,255,255,.35); border-radius:14px; background:rgba(15,23,42,.78); color:white; font-size:17px; font-weight:900; backdrop-filter:blur(10px); touch-action:none; box-shadow:0 6px 16px rgba(0,0,0,.25); }
+            #mobile-controls button:active { background:#6257e8; transform:scale(.96); }
+            #mobile-actions { position:fixed; z-index:35; right:12px; bottom:18px; display:flex; flex-direction:column; gap:8px; pointer-events:auto; }
+            #mobile-actions button { min-width:64px; min-height:48px; padding:8px; border-radius:14px; border:1px solid rgba(255,255,255,.35); background:rgba(15,23,42,.82); color:white; font-size:11px; font-weight:900; backdrop-filter:blur(10px); }
+            #dialogue-overlay { align-items:flex-end; padding:8px; }
+            #dialogue-overlay > div { padding:16px; max-height:78vh; border-radius:22px; }
+            #dlg-text { font-size:14px; }
+            #dlg-flag-challenge .grid { grid-template-columns:1fr; }
+            #dlg-choices-list > button { min-height:48px; padding:12px; }
+            #clue-modal { padding:10px; }
+            #clue-modal > div { padding:16px; max-height:92vh; }
+        }
+
+        /* Focus-first gameplay HUD: fewer floating panels and less visual competition */
+        #hud-layer {
+            padding: 14px 18px;
+            gap: 8px;
+        }
+        #hud-layer .hud-glass {
+            box-shadow: 0 6px 18px rgba(2, 6, 23, .20);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+        #hud-layer > .flex:first-child {
+            flex-wrap: nowrap;
+            align-items: flex-start;
+            gap: 12px;
+        }
+        #hud-layer > .flex:first-child > .hud-glass {
+            width: min(340px, 38vw);
+            max-width: 340px;
+            padding: 11px 13px;
+        }
+        #hud-layer > .flex:first-child > .flex {
+            flex: 0 0 auto;
+            gap: 7px;
+        }
+        #hud-layer > .flex:first-child > .flex > .hud-glass {
+            padding: 10px 12px;
+        }
+        #hud-quest-title {
+            font-size: 13px;
+            line-height: 1.35;
+        }
+        #hud-journey { display: none !important; }
+        #hud-layer > .flex:last-child > div:first-child { display: none !important; }
+        #minimap-canvas { width: 104px; height: 104px; }
+        #interact-prompt {
+            margin-bottom: 9vh;
+            box-shadow: 0 8px 24px rgba(0,0,0,.24);
+        }
+        #btn-radar-vision { max-width: 220px; }
+        #radar-btn-label { font-size: 11px; }
+
+        @media (max-width: 760px) {
+            #hud-layer { padding: 8px; gap: 5px; }
+            #hud-layer > .flex:first-child {
+                display: flex;
+                flex-direction: column;
+                align-items: stretch;
+                gap: 6px;
+            }
+            #hud-layer > .flex:first-child > .hud-glass {
+                width: 100%;
+                max-width: none;
+                padding: 8px 10px;
+            }
+            #hud-layer > .flex:first-child > .hud-glass > div:last-child {
+                gap: 8px;
+                margin-top: 5px;
+                font-size: 9px;
+            }
+            #hud-quest-title { font-size: 11px; }
+            #hud-layer > .flex:first-child > .flex {
+                width: 100%;
+                flex-direction: row;
+                align-items: center;
+                gap: 6px;
+            }
+            #hud-layer > .flex:first-child > .flex > .hud-glass {
+                flex: 1;
+                min-width: 0;
+                padding: 7px 9px;
+                gap: 9px;
+            }
+            #hud-layer > .flex:first-child > .flex > .hud-glass > div {
+                width: min(29vw, 104px);
+            }
+            #hud-layer > .flex:first-child > .flex > .hud-glass > div:nth-child(3) {
+                display: none;
+            }
+            #btn-radar-vision {
+                max-width: none;
+                flex: 1;
+                min-width: 0;
+                padding: 7px 8px;
+                font-size: 10px;
+            }
+            #radar-btn-label { font-size: 9px; }
+            #btn-audio, #hud-layer button[onclick="togglePauseMenu()"] {
+                flex: 0 0 36px;
+                width: 36px;
+                height: 36px;
+                justify-content: center;
+                padding: 0;
+            }
+            #minimap-canvas, #hud-layer > .flex:last-child > .hud-glass:last-child {
+                display: none !important;
+            }
+            #interact-prompt {
+                margin: 0 8px 20vh;
+                max-width: calc(100vw - 24px);
+                padding: 9px 13px;
+                font-size: 11px;
+            }
+            #mobile-controls { left: 10px; bottom: 12px; }
+            #mobile-actions { right: 10px; bottom: 14px; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; scroll-behavior:auto !important; transition-duration:.01ms !important; }
+        }
+
+
+        /* Focused-learning mode: reduce competing visual signals during play */
+        #hud-layer { padding: 14px 18px !important; }
+        #hud-layer > .flex:first-child { justify-content:flex-start !important; }
+        #hud-layer > .flex:first-child > .flex { display:none !important; }
+        #hud-layer > .flex:first-child > div:first-child {
+            max-width:min(360px, calc(100vw - 28px)) !important;
+            padding:10px 13px !important;
+            background:rgba(15,23,42,.72) !important;
+            border:1px solid rgba(255,255,255,.12) !important;
+            box-shadow:0 4px 16px rgba(0,0,0,.16) !important;
+            backdrop-filter:blur(8px) !important;
+        }
+        #hud-zone-name, #hud-distance, #hud-clues, #hud-talks,
+        #hud-layer > .flex:first-child > div:first-child .mt-2 { display:none !important; }
+        #hud-quest-title { font-size:12px !important; font-weight:700 !important; }
+        #hud-journey, #hud-layer > .flex:last-child,
+        #btn-radar-vision, #mobile-actions button:last-child { display:none !important; }
+        #interact-prompt { animation:none !important; box-shadow:0 4px 16px rgba(0,0,0,.18) !important; }
+        #interact-prompt .keycap { display:none !important; }
+        #interact-prompt { padding:10px 16px !important; background:rgba(15,23,42,.88) !important; }
+        .floating-3d-tag { opacity:.88; filter:none !important; }
+
+        /* One learning task at a time; remove decorative conversation metadata */
+        #dialogue-overlay { background:rgba(2,6,23,.58) !important; backdrop-filter:blur(1px) !important; }
+        #dialogue-overlay > div { max-width:700px !important; padding:clamp(16px,2.4vw,24px) !important; box-shadow:0 12px 38px rgba(0,0,0,.22) !important; }
+        #dlg-avatar, #dlg-speaker-role, #dlg-turn-indicator, #dlg-radar-btn { display:none !important; }
+        #dlg-text { font-size:clamp(15px,1.5vw,18px) !important; line-height:1.65 !important; font-weight:600 !important; }
+        #dialogue-overlay .my-4 { margin-top:14px !important; margin-bottom:14px !important; }
+        #dlg-flag-challenge > div:first-child { display:block !important; }
+        #dlg-flag-challenge > div:first-child > span:last-child { display:none !important; }
+        #dlg-flag-challenge > div:first-child > span:first-child { font-size:13px !important; line-height:1.5 !important; }
+        #dlg-flag-challenge button, #dlg-choices-list > button { box-shadow:none !important; transform:none !important; }
+        #dlg-counselor-insight { border-radius:12px !important; }
+        #dlg-counselor-insight > div:first-child { display:block !important; }
+        #dlg-counselor-insight > div:first-child > span:last-child { display:none !important; }
+        #dlg-outcome-box > div { background:#f1f5f9 !important; color:#1e293b !important; border:1px solid #e2e8f0 !important; }
+        #dlg-outcome-box > div i { display:none !important; }
+        #dlg-outcome-box button { box-shadow:none !important; }
+        #toast-banner { top:16px !important; }
+        #toast-banner > div { box-shadow:0 4px 14px rgba(0,0,0,.16) !important; }
+        @media (max-width:760px) {
+            #hud-layer { padding:10px !important; }
+            #hud-layer > .flex:first-child > div:first-child { width:auto !important; }
+            #mobile-controls { opacity:.72; transform:scale(.92); transform-origin:bottom left; }
+            #mobile-actions { display:none !important; }
+            #dialogue-overlay > div { max-height:82vh !important; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            #interact-prompt, .floating-3d-tag { animation:none !important; transition:none !important; }
+        }
+    </style>
+</head>
+<body tabindex="0" id="game-body">
+
+    <!-- 3D WebGL Canvas Container -->
+    <div id="webgl-container"></div>
+
+    <!-- Rational Radar Mode Screen Vignette -->
+    <div id="radar-vignette"></div>
+
+    <!-- Floating 3D Character Subtext & Nameplates Container -->
+    <div id="floating-labels-layer" class="fixed inset-0 pointer-events-none z-10 overflow-hidden"></div>
+
+    <!-- ==================== 1. TITLE & PERSPECTIVE SELECTION OVERLAY ==================== -->
+    <div id="screen-title" class="fixed inset-0 z-[65] flex items-center justify-center p-4 bg-slate-950/65 backdrop-blur-md">
+        <div class="hud-glass-light rounded-3xl max-w-2xl w-full p-6 sm:p-8 text-slate-800 animate-slide-up max-h-[92vh] overflow-y-auto">
+            <div class="flex items-center justify-between gap-2 mb-5">
+                <span class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-indigo-100 text-indigo-700 text-xs font-black"><i class="fa-solid fa-cube"></i> 3D Campus Simulation</span>
+                <span id="intro-step-label" class="text-xs font-bold text-slate-500">STEP 1 OF 2</span>
+            </div>
+
+            <section id="intro-gender-step">
+                <h1 class="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 leading-tight mb-2">Campus Love Radar</h1>
+                <p class="text-sm text-slate-600 leading-relaxed mb-7">Spot Red Flags and Green Flags · A university relationship learning experience</p>
+                <p class="text-xs font-black uppercase tracking-wider text-slate-500 text-center mb-3">Choose your character appearance</p>
+                <div class="grid grid-cols-2 gap-3 mb-6">
+                    <button type="button" id="btn-gender-male" onclick="selectPlayerGender('male')" class="gender-btn group p-5 rounded-2xl border-2 border-indigo-300 bg-indigo-50 hover:bg-indigo-100 transition text-center cursor-pointer ring-2 ring-indigo-500">
+                        <div class="text-4xl mb-2">👨🏻‍🎓</div><div class="font-black text-sm text-slate-900">Masculine Appearance</div><div class="text-[11px] text-slate-500 mt-1">Short Hair · Blue Top</div>
+                    </button>
+                    <button type="button" id="btn-gender-female" onclick="selectPlayerGender('female')" class="gender-btn group p-5 rounded-2xl border-2 border-slate-200 bg-slate-50 hover:bg-rose-50 hover:border-rose-300 transition text-center cursor-pointer">
+                        <div class="text-4xl mb-2">👩🏻‍🎓</div><div class="font-black text-sm text-slate-900">Feminine Appearance</div><div class="text-[11px] text-slate-500 mt-1">Long Hair · Pink Top</div>
+                    </button>
+                </div>
+                <button type="button" onclick="showGameGuide()" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-rose-500 hover:from-indigo-500 hover:to-rose-400 text-white font-black text-sm shadow-lg transition flex items-center justify-center gap-2 cursor-pointer"><span>Continue</span><i class="fa-solid fa-arrow-right"></i></button>
+            </section>
+
+            <section id="intro-guide-step" class="hidden">
+                <h2 class="text-2xl sm:text-3xl font-black text-slate-900 mb-2">Before You Explore</h2>
+                <p class="text-sm text-slate-600 mb-5">Here is what to do around the campus.</p>
+                <div class="rounded-2xl border border-rose-200 bg-rose-50 p-4 mb-4">
+                    <div class="flex items-center gap-2 mb-1"><span class="text-xl">🗼</span><h3 class="font-black text-rose-800 text-sm">Your Main Mission</h3></div>
+                    <p class="text-sm text-slate-700 leading-relaxed">Explore the campus and <strong>look for people standing beside the tall red beacon pillars</strong>. Approach them and interact to complete the chapter tasks, conversations and relationship decisions.</p>
+                </div>
+                <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 mb-4">
+                    <div class="flex items-center gap-2 mb-1"><span class="text-xl">📄</span><h3 class="font-black text-amber-800 text-sm">Read the Campus Documents</h3></div>
+                    <p class="text-sm text-slate-700 leading-relaxed">You can also find and read the <strong>collectible relationship observation notes</strong> around the campus. These documents explain topics such as boundaries, communication, red flags and healthy relationships. Read them carefully and complete the short checks to add what you learn to your Radar Database.</p>
+                </div>
+                <div class="rounded-2xl bg-slate-900 text-slate-100 p-4 mb-5">
+                    <h3 class="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-3">Desktop Controls</h3>
+                    <div class="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
+                        <div class="flex items-center gap-2"><span class="keycap">W A S D</span><span class="text-slate-300">Move</span></div>
+                        <div class="flex items-center gap-2"><span class="keycap">↑ ↓ ← →</span><span class="text-slate-300">Move</span></div>
+                        <div class="flex items-center gap-2"><span class="keycap">Q / E</span><span class="text-slate-300">Rotate camera</span></div>
+                        <div class="flex items-center gap-2"><span class="keycap">Mouse</span><span class="text-slate-300">Drag to look around</span></div>
+                        <div class="flex items-center gap-2"><span class="keycap">Space / F</span><span class="text-slate-300">Interact / collect</span></div>
+                        <div class="flex items-center gap-2"><span class="keycap">R</span><span class="text-sky-300">Toggle Rational Radar</span></div>
+                    </div>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 mb-5">
+                    <h3 class="text-[11px] font-black uppercase tracking-wider text-slate-500 mb-3">Choose Your Dating Storyline</h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <button type="button" id="btn-orient-women" onclick="selectOrientation('male')" class="orient-btn p-3 rounded-xl border-2 border-indigo-300 bg-indigo-50 text-left cursor-pointer ring-2 ring-indigo-500"><div class="font-black text-sm text-slate-900 mb-1">👩‍❤️‍👨 Interested in Women</div><p class="text-[11px] text-slate-600">Meet randomly generated characters and explore different dating experiences.</p></button>
+                        <button type="button" id="btn-orient-men" onclick="selectOrientation('female')" class="orient-btn p-3 rounded-xl border-2 border-slate-200 bg-white text-left cursor-pointer"><div class="font-black text-sm text-slate-900 mb-1">👨‍❤️‍👩 Interested in Men</div><p class="text-[11px] text-slate-600">Meet randomly generated characters and explore different dating experiences.</p></button>
+                    </div>
+                    <p class="text-[10px] text-slate-400 mt-2">Your character appearance and storyline can be combined freely.</p>
+                </div>
+                <div class="flex gap-2">
+                    <button type="button" onclick="backToGenderStep()" class="px-4 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs">Back</button>
+                    <button type="button" onclick="confirmAndStartGame()" class="flex-1 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-rose-500 hover:from-indigo-500 hover:to-rose-400 text-white font-black text-sm shadow-lg transition flex items-center justify-center gap-2 cursor-pointer"><i class="fa-solid fa-play"></i><span>Start Exploring the Campus</span></button>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <!-- ==================== 2. IN-GAME 3D HUD OVERLAY ==================== -->
+    <div id="hud-layer" class="hidden fixed inset-0 pointer-events-none z-20 flex flex-col justify-between p-3 sm:p-5">
+        
+        <!-- Top Bar: Chapter Info, Meters & Controls -->
+        <div class="flex flex-wrap items-start justify-between gap-3">
+            
+            <!-- Left: Chapter & Objective Tracker -->
+            <div class="hud-glass rounded-2xl p-3.5 text-white pointer-events-auto max-w-sm">
+                <div class="flex items-center gap-2 mb-1">
+                    <span id="hud-chapter-badge" class="px-2.5 py-0.5 rounded-md bg-indigo-500 text-[11px] font-black">
+                        Chapter 1 / 5
+                    </span>
+                    <span id="hud-zone-name" class="text-xs font-bold text-amber-300">
+                        ☀️ Orientation Camp Lawn
+                    </span>
+                </div>
+                <h2 id="hud-quest-title" class="text-sm font-black text-white leading-snug">
+                    Objective: Reach the beacon and meet your conversation partner
+                </h2>
+                <div class="flex items-center gap-3 mt-2 text-[11px] text-slate-300">
+                    <span><i class="fa-solid fa-compass text-sky-400 mr-1"></i>Distance: <strong id="hud-distance" class="text-white">0m</strong></span>
+                    <span><i class="fa-solid fa-book-open text-amber-400 mr-1"></i>Notes: <strong id="hud-clues" class="text-amber-300">0/12</strong></span>
+                    <span><i class="fa-solid fa-comments text-indigo-300 mr-1"></i>Conversations: <strong id="hud-talks" class="text-indigo-200">0</strong></span>
+                </div>
+            </div>
+
+            <!-- Center/Right: Relationship Meters & Radar Toggle -->
+            <div class="flex flex-col sm:items-end gap-2 pointer-events-auto">
+                <div class="hud-glass rounded-2xl p-3 text-white flex items-center gap-3 sm:gap-4">
+                    <!-- Spark -->
+                    <div class="w-20 sm:w-24">
+                        <div class="flex justify-between text-[10px] font-bold mb-1">
+                            <span class="text-rose-400">❤️ Attraction</span>
+                            <span id="hud-val-spark">50%</span>
+                        </div>
+                        <div class="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                            <div id="hud-bar-spark" class="h-full bg-rose-500 transition-all duration-300" style="width: 50%"></div>
+                        </div>
+                    </div>
+                    <!-- Boundary -->
+                    <div class="w-20 sm:w-24">
+                        <div class="flex justify-between text-[10px] font-bold mb-1">
+                            <span class="text-emerald-400">🛡️ Healthy Boundaries</span>
+                            <span id="hud-val-boundary">50%</span>
+                        </div>
+                        <div class="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                            <div id="hud-bar-boundary" class="h-full bg-emerald-500 transition-all duration-300" style="width: 50%"></div>
+                        </div>
+                    </div>
+                    <!-- Radar Accuracy -->
+                    <div class="border-l border-slate-700 pl-3 text-center">
+                        <div class="text-[10px] text-slate-400 font-bold">Radar Hits</div>
+                        <div id="hud-val-radar" class="text-xs font-black text-sky-400">0/0</div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons Row -->
+                <div class="flex items-center gap-2">
+                    <!-- Rational Radar Vision Toggle -->
+                    <button onclick="toggleRadarVision()" id="btn-radar-vision" class="hud-glass px-3.5 py-2 rounded-xl text-xs font-black text-rose-300 border border-rose-400/40 hover:bg-slate-800 transition flex items-center gap-2 cursor-pointer">
+                        <span id="radar-btn-icon">🌸</span>
+                        <span id="radar-btn-label">Attraction Filter (Press R to toggle Rational Radar)</span>
+                    </button>
+
+                    <!-- Audio Mute Toggle -->
+                    <button onclick="toggleAudio()" id="btn-audio" class="hud-glass w-9 h-9 rounded-xl text-slate-200 hover:text-white flex items-center justify-center transition cursor-pointer" title="Background Music / Sound Effects">
+                        <i id="audio-icon" class="fa-solid fa-volume-high text-xs"></i>
+                    </button>
+
+                    <!-- Pause / Presenter Menu -->
+                    <button onclick="togglePauseMenu()" class="hud-glass px-3 h-9 rounded-xl text-xs font-bold text-slate-200 hover:text-white flex items-center gap-1.5 transition cursor-pointer" title="Pause and Lecture Chapter Navigation">
+                        <i class="fa-solid fa-bars"></i>
+                        <span class="hidden sm:inline">Menu (ESC)</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Five-chapter progress tracker -->
+        <div id="hud-journey" class="hud-glass rounded-2xl px-3 py-2 pointer-events-none">
+            <div class="flex items-center justify-between gap-2 mb-1.5"><span class="text-[9px] font-black uppercase tracking-widest text-slate-400">Your campus journey</span><span id="journey-caption" class="text-[9px] font-bold text-slate-300">Chapter 1 of 5</span></div>
+            <div class="grid grid-cols-5 gap-2" id="journey-steps">
+                <div class="journey-step active"><span class="journey-dot">1</span><span class="hidden sm:inline">Meet</span></div>
+                <div class="journey-step"><span class="journey-dot">2</span><span class="hidden sm:inline">Connect</span></div>
+                <div class="journey-step"><span class="journey-dot">3</span><span class="hidden sm:inline">Boundaries</span></div>
+                <div class="journey-step"><span class="journey-dot">4</span><span class="hidden sm:inline">Date</span></div>
+                <div class="journey-step"><span class="journey-dot">5</span><span class="hidden sm:inline">Clarity</span></div>
+            </div>
+        </div>
+
+        <!-- Mobile touch controls -->
+        <div id="mobile-controls" aria-label="Movement controls">
+            <span></span><button type="button" data-move="w" aria-label="Move forward">▲</button><span></span>
+            <button type="button" data-move="a" aria-label="Move left">◀</button><button type="button" data-move="s" aria-label="Move backward">▼</button><button type="button" data-move="d" aria-label="Move right">▶</button>
+        </div>
+        <div id="mobile-actions">
+            <button type="button" onclick="triggerNearbyInteraction()">TALK / PICK UP</button>
+            <button type="button" onclick="toggleRadarVision()">RADAR · R</button>
+        </div>
+
+        <!-- Center Interaction Prompt (Appears when near NPC or Clue) -->
+        <div id="interact-prompt" class="hidden self-center hud-glass px-5 py-2.5 rounded-full text-white text-xs sm:text-sm font-black flex items-center gap-2.5 animate-pulse-slow pointer-events-auto cursor-pointer" onclick="triggerNearbyInteraction()">
+            <span class="keycap bg-amber-500 text-slate-950 border-amber-300">Space</span>
+            <span id="interact-prompt-text">Talk to Marcus</span>
+        </div>
+
+        <!-- Bottom Bar: Minimap & Quick Keyboard Legend -->
+        <div class="flex items-end justify-between gap-3">
+            <!-- Keyboard Hint Pill -->
+            <div class="hud-glass rounded-2xl px-3.5 py-2.5 text-[11px] text-slate-300 hidden md:flex items-center gap-4">
+                <span><span class="keycap mr-1">WASD</span> Move</span>
+                <span><span class="keycap mr-1">Q</span><span class="keycap mr-1">E</span> Rotate Camera</span>
+                <span><span class="keycap mr-1">Space</span> Interact</span>
+                <span><span class="keycap mr-1">R</span> Rational Radar</span>
+                <span><span class="keycap mr-1">ESC</span> Menu / Chapter Select</span>
+            </div>
+
+            <!-- 2D Radar Minimap -->
+            <div class="hud-glass rounded-2xl p-2 pointer-events-auto ml-auto">
+                <canvas id="minimap-canvas" width="130" height="130" class="rounded-xl bg-slate-950/80"></canvas>
+                <div class="text-[10px] text-center text-slate-400 font-bold mt-1">
+                    <span class="text-sky-400">● You</span> · <span class="text-amber-400">★ Target</span> · <span class="text-emerald-400">◆ Notes</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== 3. DIALOGUE & FLAG RADAR MODAL ==================== -->
+    <div id="dialogue-overlay" class="hidden fixed inset-0 z-[55] flex items-end justify-center p-3 sm:p-6 bg-slate-950/35 backdrop-blur-[2px]">
+        <div class="hud-glass-light rounded-3xl max-w-3xl w-full p-5 sm:p-7 text-slate-800 animate-slide-up border-2 border-white">
+            
+            <!-- Dialogue Header -->
+            <div class="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-200">
+                <div class="flex items-center gap-3">
+                    <div id="dlg-avatar" class="w-11 h-11 rounded-2xl bg-indigo-100 flex items-center justify-center text-2xl shadow-inner">
+                        🧑🏻
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 id="dlg-speaker-name" class="font-black text-base sm:text-lg text-slate-900">Marcus</h3>
+                            <span id="dlg-speaker-role" class="text-[11px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-800">Orientation Camp Leader</span>
+                        </div>
+                        <p id="dlg-turn-indicator" class="text-xs text-slate-500 font-medium">Conversation 1 / 4</p>
+                    </div>
+                </div>
+
+                <!-- In-Dialogue Radar Toggle -->
+                <button onclick="toggleRadarVision()" id="dlg-radar-btn" class="px-3 py-1.5 rounded-xl text-xs font-black bg-rose-100 text-rose-700 hover:bg-rose-200 border border-rose-200 transition flex items-center gap-1.5 cursor-pointer">
+                    <span>🔍</span>
+                    <span id="dlg-radar-text">Activate Rational View (R)</span>
+                </button>
+            </div>
+
+            <!-- Dialogue Text Box -->
+            <div class="my-4 space-y-2.5">
+                <p id="dlg-text" class="text-sm sm:text-base font-bold text-slate-800 leading-relaxed">
+                    “Loading conversation…”
+                </p>
+
+                <!-- Psychological Subtext Box (Visible when Rational Radar is ON) -->
+                <div id="dlg-subtext-box" class="hidden p-3.5 rounded-2xl bg-slate-900 text-sky-200 border border-sky-500/50 text-xs flex items-start gap-2.5 animate-slide-up">
+                    <i class="fa-solid fa-satellite-dish text-sky-400 text-base mt-0.5"></i>
+                    <div>
+                        <span class="font-black text-sky-400 block mb-0.5">[Rational Radar · Hidden Meaning Analysis]</span>
+                        <span id="dlg-subtext" class="leading-relaxed">Hidden meaning analysis…</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PHASE A: Flag Classification Challenge (When triggered on key turns) -->
+            <div id="dlg-flag-challenge" class="hidden pt-3 border-t border-slate-200 space-y-3">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-black text-indigo-700 flex items-center gap-1.5">
+                        <i class="fa-solid fa-triangle-exclamation text-amber-500"></i>
+                        Key Behaviour Check: Which relationship signal best describes the other person’s words or actions?
+                    </span>
+                    <span class="text-[11px] text-slate-400 font-bold">Press number keys 1 / 2 / 3</span>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <button onclick="handleFlagVote('red')" class="p-3 rounded-2xl bg-rose-50 hover:bg-rose-100 border-2 border-rose-200 hover:border-rose-500 text-rose-800 font-black text-xs sm:text-sm transition flex items-center justify-center gap-2 active:scale-97 cursor-pointer">
+                        <span class="keycap bg-rose-600 border-rose-400">1</span>
+                        <span>🚩 Red Flag · Warning</span>
+                    </button>
+                    <button onclick="handleFlagVote('yellow')" class="p-3 rounded-2xl bg-amber-50 hover:bg-amber-100 border-2 border-amber-200 hover:border-amber-500 text-amber-800 font-black text-xs sm:text-sm transition flex items-center justify-center gap-2 active:scale-97 cursor-pointer">
+                        <span class="keycap bg-amber-600 border-amber-400">2</span>
+                        <span>🟡 Yellow Flag · Observe</span>
+                    </button>
+                    <button onclick="handleFlagVote('green')" class="p-3 rounded-2xl bg-emerald-50 hover:bg-emerald-100 border-2 border-emerald-200 hover:border-emerald-500 text-emerald-800 font-black text-xs sm:text-sm transition flex items-center justify-center gap-2 active:scale-97 cursor-pointer">
+                        <span class="keycap bg-emerald-600 border-emerald-400">3</span>
+                        <span>💚 Green Flag · Healthy</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Counselor Insight Card (Shown right after Flag Vote) -->
+            <div id="dlg-counselor-insight" class="hidden my-3 p-3.5 rounded-2xl border-l-4 text-xs space-y-1 animate-slide-up">
+                <div class="font-black flex items-center justify-between">
+                    <span id="insight-badge">Assessment Result</span>
+                    <span class="opacity-75">🩺 Counsellor’s Psychological Insight</span>
+                </div>
+                <p id="insight-text" class="leading-relaxed opacity-95">Analysis…</p>
+            </div>
+
+            <!-- PHASE B: Player Response Choices -->
+            <div id="dlg-choices-box" class="pt-3 border-t border-slate-200 space-y-2">
+                <div class="text-[11px] font-bold text-slate-400 flex justify-between">
+                    <span>Choose Your Response:</span>
+                    <span>Press keys <strong class="text-slate-600">1 - 4</strong> or click an option</span>
+                </div>
+                <div id="dlg-choices-list" class="space-y-2">
+                    <!-- Injected via JS -->
+                </div>
+            </div>
+
+            <!-- PHASE C: Turn Outcome & Continue Button -->
+            <div id="dlg-outcome-box" class="hidden pt-3 border-t border-slate-200 space-y-3 animate-slide-up">
+                <div class="p-3.5 rounded-2xl bg-slate-800 text-slate-100 text-xs sm:text-sm leading-relaxed flex items-start gap-2.5">
+                    <i class="fa-solid fa-sparkles text-amber-400 mt-1"></i>
+                    <div id="dlg-outcome-text">Interaction Feedback…</div>
+                </div>
+                <button onclick="advanceDialogueTurn()" class="w-full py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-sm shadow-md transition flex items-center justify-center gap-2 cursor-pointer">
+                    <span>Continue Conversation (Space / Enter)</span>
+                    <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ==================== 4. CLUE / SIDE DIALOGUE MODAL ==================== -->
+    <div id="clue-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm" style="pointer-events:auto;">
+        <div class="hud-glass-light rounded-3xl max-w-lg w-full p-5 sm:p-6 text-slate-800 animate-slide-up space-y-3 max-h-[90vh] overflow-hidden flex flex-col shadow-2xl border-2 border-amber-200/80">
+            <div class="flex items-center gap-3 shrink-0">
+                <div id="clue-icon-box" class="w-11 h-11 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center text-xl shrink-0">
+                    <i class="fa-solid fa-magnifying-glass-chart"></i>
+                </div>
+                <div class="min-w-0 flex-1">
+                    <span id="clue-type-label" class="text-[11px] font-black text-amber-600 uppercase">Campus Relationship Note Discovered</span>
+                    <h3 id="clue-title" class="font-black text-base sm:text-lg text-slate-900 leading-snug">Note Title</h3>
+                </div>
+            </div>
+
+            <div id="clue-scroll-box" class="flex-1 min-h-[140px] overflow-y-auto bg-slate-50 p-4 rounded-2xl text-sm text-slate-700 leading-relaxed border border-slate-200" style="max-height:min(42vh,320px); -webkit-overflow-scrolling:touch;">
+                <div id="clue-body" class="space-y-2">Loading note…</div>
+            </div>
+
+            <div id="clue-read-progress" class="shrink-0 text-[11px] font-bold text-slate-500 flex items-center justify-between gap-2">
+                <span id="clue-read-hint">Please read the content above</span>
+                <span id="clue-read-timer" class="text-amber-600">Preparing…</span>
+            </div>
+
+            
+            <div id="side-dlg-choices" class="hidden shrink-0 space-y-2 max-h-[28vh] overflow-y-auto"></div>
+
+            <div class="shrink-0 flex gap-2">
+                <button type="button" id="clue-skip-btn" onclick="forceCloseClueModal(false)" class="flex-1 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs cursor-pointer transition">
+                    Maybe Later (Esc)
+                </button>
+                <button type="button" id="clue-collect-btn" onclick="tryCloseClueModal()" class="flex-[1.5] py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-black text-xs cursor-pointer transition shadow-md">
+                    I’ve finished reading. Start the quiz
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== 5. PAUSE & WORKSHOP PRESENTER MENU (ESC) ==================== -->
+    <div id="pause-modal" class="hidden fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md">
+        <div class="hud-glass-light rounded-3xl max-w-lg w-full p-6 text-slate-800 animate-slide-up space-y-5">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                <h3 class="font-black text-lg text-slate-900 flex items-center gap-2">
+                    <i class="fa-solid fa-sliders text-indigo-600"></i> Game Menu and Live Lecture Controls
+                </h3>
+                <button onclick="togglePauseMenu()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 cursor-pointer">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Workshop Presenter Chapter Jump -->
+            <div class="space-y-2">
+                <div class="text-xs font-black text-indigo-600 flex items-center gap-1.5">
+                    <i class="fa-solid fa-chalkboard-user"></i> Counsellor Presentation Mode: Quick Chapter Navigation
+                </div>
+                <p class="text-[11px] text-slate-500">Use this to jump directly to specific scenes and Red / Green Flag examples during a welcome-week presentation:</p>
+                <div class="grid grid-cols-1 gap-2 pt-1" id="presenter-chapter-list">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 pt-2 border-t border-slate-200">
+                <button onclick="togglePauseMenu()" class="py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs cursor-pointer">
+                    Resume Game (ESC)
+                </button>
+                <button onclick="returnToTitleScreen()" class="py-2.5 rounded-xl bg-rose-100 hover:bg-rose-200 text-rose-700 font-bold text-xs cursor-pointer">
+                    Change Appearance and Storyline
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== 6. FINAL COUNSELOR REPORT & PADLET SHARE ==================== -->
+    <div id="screen-ending" class="hidden fixed inset-0 z-[65] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-md">
+        <div class="hud-glass-light rounded-3xl max-w-2xl w-full p-6 sm:p-8 text-slate-800 animate-slide-up max-h-[92vh] overflow-y-auto space-y-5">
+            
+            <div class="flex items-center justify-between">
+                <span class="px-3 py-1 rounded-full bg-slate-900 text-white text-xs font-black">
+                    🎓 2026 Welcome Week · 3D Dating Simulation Report
+                </span>
+                <span id="end-mode-tag" class="text-xs font-bold text-indigo-600">Masculine Perspective</span>
+            </div>
+
+            <div class="text-center py-2">
+                <div id="end-emoji" class="text-6xl mb-2">👑🧠</div>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-widest">Your Campus Relationship Style</p>
+                <h2 id="end-title" class="text-2xl sm:text-3xl font-black text-slate-900 mt-1">Clear-Headed Relationship Observer</h2>
+                <p id="end-subtitle" class="text-xs sm:text-sm font-bold text-rose-600 mt-1">“I can enjoy the butterflies, but my boundaries and self-respect stay strong!”</p>
+            </div>
+
+            <!-- Final Stats -->
+            <div class="grid grid-cols-4 gap-2 text-center">
+                <div class="p-3 rounded-2xl bg-rose-50 border border-rose-100">
+                    <div class="text-[11px] font-bold text-rose-600">Attraction</div>
+                    <div id="end-stat-spark" class="text-lg font-black text-slate-900">80%</div>
+                </div>
+                <div class="p-3 rounded-2xl bg-emerald-50 border border-emerald-100">
+                    <div class="text-[11px] font-bold text-emerald-600">Healthy Boundaries</div>
+                    <div id="end-stat-boundary" class="text-lg font-black text-slate-900">85%</div>
+                </div>
+                <div class="p-3 rounded-2xl bg-sky-50 border border-sky-100">
+                    <div class="text-[11px] font-bold text-sky-600">Radar Hits</div>
+                    <div id="end-stat-radar" class="text-lg font-black text-slate-900">5/5</div>
+                </div>
+                <div class="p-3 rounded-2xl bg-amber-50 border border-amber-100">
+                    <div class="text-[11px] font-bold text-amber-600">Observation Notes</div>
+                    <div id="end-stat-clues" class="text-lg font-black text-slate-900">12/12</div>
+                </div>
+            </div>
+
+            <!-- Counselor Deep Feedback -->
+            <div class="p-4 rounded-2xl bg-slate-100 space-y-1.5">
+                <h4 class="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                    <i class="fa-solid fa-user-doctor text-indigo-600"></i> Counsellor’s Summary and Suggestions:
+                </h4>
+                <p id="end-advice" class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                    Recommendations…
+                </p>
+            </div>
+
+            <!-- Flag Log -->
+            <div class="space-y-2">
+                <h4 class="text-xs font-black text-slate-700">📡 Five-Chapter Red / Green Flag Review:</h4>
+                <div id="end-flag-history" class="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    <!-- Populated via JS -->
+                </div>
+            </div>
+
+            <!-- Document mistake review -->
+            <div id="document-mistakes-panel" class="hidden p-4 rounded-2xl bg-amber-50 border border-amber-200 space-y-3">
+                <div class="flex items-center justify-between gap-2">
+                    <h4 class="text-sm font-black text-amber-900">📝 Review Your Document Quiz Mistakes</h4>
+                    <span id="document-mistakes-count" class="text-xs font-black text-amber-700"></span>
+                </div>
+                <p class="text-xs text-slate-600 leading-relaxed">Read each correction carefully. The goal is not just to memorise the right option, but to know what you can do in a real situation.</p>
+                <div id="document-mistakes-list" class="space-y-3"></div>
+                <div class="rounded-xl bg-white/80 border border-amber-100 p-3 text-xs text-slate-700 leading-relaxed">
+                    <strong>How to improve:</strong> Re-read the named document, identify the key principle, compare it with the correct answer, and practise using the suggested action in a realistic situation. If you are unsure, pause, ask a clarifying question, and choose a response that respects both people’s boundaries.
+                </div>
+                <button onclick="hideDocumentMistakes()" class="w-full py-2.5 rounded-xl bg-amber-200 hover:bg-amber-300 text-amber-950 font-black text-xs cursor-pointer">Back to Final Report</button>
+            </div>
+
+            <!-- Review & Replay Buttons -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                <button onclick="showDocumentMistakes()" class="py-3.5 px-4 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-black text-sm shadow-lg transition flex items-center justify-center gap-2 cursor-pointer">
+                    <i class="fa-solid fa-list-check"></i>
+                    <span>Review Document Mistakes</span>
+                </button>
+                <button onclick="returnToTitleScreen()" class="py-3.5 px-4 rounded-2xl bg-indigo-100 hover:bg-indigo-200 text-indigo-800 font-black text-sm transition flex items-center justify-center gap-2 cursor-pointer">
+                    <i class="fa-solid fa-rotate-left"></i>
+                    <span>Change Appearance and Storyline</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Toast Banner -->
+    <div id="toast-banner" class="fixed top-20 left-1/2 -translate-x-1/2 z-50 hidden">
+        <div class="bg-slate-900/95 text-white px-5 py-2.5 rounded-full shadow-2xl border border-slate-700 text-xs font-black flex items-center gap-2">
+            <i class="fa-solid fa-circle-info text-sky-400"></i>
+            <span id="toast-text">Notifications</span>
+        </div>
+    </div>
+
+    <script>
+        // ============================================================================
+        // 1. PROCEDURAL WEB AUDIO ENGINE (Gentle Campus Ambient & UI SFX)
+        // ============================================================================
+        class SoundEngine {
+            constructor() {
+                this.ctx = null;
+                this.isMuted = false;
+                this.bgmInterval = null;
+                this.noteIndex = 0;
+            }
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioContext();
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+                this.startAmbientLoop();
+            }
+            playTone(freq, type = 'sine', duration = 0.25, gainVal = 0.06) {
+                if (this.isMuted || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                gain.gain.setValueAtTime(gainVal, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + duration);
+            }
+            playBlip() { this.playTone(520, 'triangle', 0.08, 0.04); }
+            playGreenChime() {
+                this.playTone(523.25, 'sine', 0.3, 0.08);
+                setTimeout(() => this.playTone(659.25, 'sine', 0.4, 0.08), 110);
+            }
+            playRedAlert() {
+                this.playTone(220, 'sawtooth', 0.25, 0.05);
+                setTimeout(() => this.playTone(185, 'sawtooth', 0.35, 0.05), 140);
+            }
+            playClueFound() {
+                this.playTone(587.33, 'sine', 0.2, 0.07);
+                setTimeout(() => this.playTone(880, 'sine', 0.35, 0.07), 100);
+            }
+            startAmbientLoop() {
+                if (this.bgmInterval) clearInterval(this.bgmInterval);
+                const scale = [261.63, 329.63, 392.00, 493.88, 523.25, 493.88, 392.00, 329.63];
+                this.bgmInterval = setInterval(() => {
+                    if (!this.isMuted && this.ctx && this.ctx.state === 'running') {
+                        const freq = scale[this.noteIndex % scale.length];
+                        this.playTone(freq, 'sine', 1.4, 0.018);
+                        this.noteIndex++;
+                    }
+                }, 1500);
+            }
+            toggleMute() {
+                this.isMuted = !this.isMuted;
+                return this.isMuted;
+            }
+        }
+        const sfx = new SoundEngine();
+
+        // ============================================================================
+        // 2. RICH 5-CHAPTER NARRATIVE DATA (MALE & FEMALE PERSPECTIVES)
+        // ============================================================================
+        const STORY_DATA = {
+            female: {
+                chapters: [
+                    {
+                        id: 1,
+                        zoneName: "☀️ Orientation Camp Lawn",
+                        lighting: "day",
+                        questTitle: "Chapter 1: Head to the Orientation Lawn marker and break the ice with Marcus, your O-Camp senior",
+                        targetNpcId: "marcus",
+                        turns: [
+                            {
+                                speaker: "Marcus",
+                                role: "Year 3 Orientation Camp Group Leader",
+                                avatar: "🧑🏻‍🎓",
+                                text: "“Hi! I finally found you on the lawn! I’ve been thinking about you ever since last night’s campfire. Honestly, after three years of orientation camps, you’re the most charming and special girl I’ve met!”",
+                                subtext: "[Early Love-Bombing Signal] Within less than 48 hours of meeting you, he is already using exaggerated labels like ‘the one’ and ‘the most special’. This can create an artificial sense of intimacy before you have had time to get to know him.",
+                                choices: [
+                                    { text: "“Haha, you’re exaggerating! Do you say that to every girl in your group?”", outcome: "You used humour to defuse the excessive praise. Marcus laughed and said he meant it only about you, but you made a mental note to keep observing.", delta: { spark: 5, boundary: 10 } },
+                                    { text: "“Really? I feel like we have a special connection too!”", outcome: "You quickly embraced his intense enthusiasm. Your attraction surged, but you also began moving at his pace rather than your own.", delta: { spark: 15, boundary: -5 } },
+                                    { text: "“That’s sweet of you to say, but we’ve only just met. We’re still getting to know each other!”", outcome: "A calm, polite response that accepts the compliment without giving up your boundaries.", delta: { spark: 5, boundary: 15 } }
+                                ]
+                            },
+                            {
+                                speaker: "Marcus",
+                                role: "Year 3 Orientation Camp Group Leader",
+                                avatar: "🧑🏻‍🎓",
+                                text: "“I feel like our souls are a perfect match. I don’t want to waste time playing it slow. Don’t go back to your dorm tonight. I’ll drive you up to the Peak for a drink and some fresh air. Why don’t we make this official tonight?”",
+                                subtext: "[Rushing Intimacy and Testing Isolation] You have known each other for only two days, yet he is asking for a late-night trip alone and immediate commitment. This leaves little room to observe his character at your own pace.",
+                                flagChallenge: {
+                                    correct: "red",
+                                    explanation: "This does not automatically mean he is a bad person, but the combination of ‘barely knowing each other + a remote late-night outing + pressure to commit immediately’ creates significant risk. For a first-year student, moving the date to daytime in a public place and giving yourself time to observe is usually safer and gives you more room to make a clear decision."
+                                },
+                                choices: [
+                                    { text: "“That’s moving too fast for me. I’d rather get to know each other as friends first. How about coffee on campus on Saturday afternoon?”", outcome: "Excellent boundaries! You moved the plan from an isolated late-night outing to a safe public place during the day—and kept control of your own pace.", delta: { spark: 0, boundary: 20 } },
+                                    { text: "“Sure! Since we have such a strong connection, I’ll go along with your plan tonight!”", outcome: "You agreed to a late-night trip before you knew what he was really like. Later, you realised he was rather casual about respecting your personal boundaries.", delta: { spark: 15, boundary: -20 } },
+                                    { text: "“I have something on tonight. Maybe another time.”", outcome: "You turned him down, but did not clearly state your boundary. The next day, he continued pressuring you in the same way.", delta: { spark: -5, boundary: 5 } }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        id: 2,
+                        zoneName: "📚 Library Study Corner",
+                        lighting: "library",
+                        questTitle: "Chapter 2: Head to the Library marker and discuss your group project with Leo, a coursemate",
+                        targetNpcId: "leo",
+                        turns: [
+                            {
+                                speaker: "Leo",
+                                role: "Year 2 Society Committee Member in Your Department",
+                                avatar: "👓",
+                                text: "“I saw your message in the group chat last night saying you couldn’t find the references. I was at the library, so I borrowed these two books for you and left them on your desk. Take your time—there’s no rush. Just let me know if you need anything.”",
+                                subtext: "[A Thoughtful Green Flag Without Pressure] He noticed a practical need and offered help, while making it clear that there is no rush and no obligation. He does not ask for anything in return or create a sense of debt.",
+                                flagChallenge: {
+                                    correct: "green",
+                                    explanation: "This is a strong Green Flag: practical support paired with respect for boundaries. A reliable person helps ease your stress while giving you room to decide what you need. They do not use ‘I helped you, so you owe me your time’ as leverage."
+                                },
+                                choices: [
+                                    { text: "“That’s perfect timing—thanks, Leo! Let me buy you a coffee later to say thanks.”", outcome: "A healthy, balanced interaction! You exchanged study tips at the library, and the conversation felt relaxed and natural.", delta: { spark: 15, boundary: 15 } },
+                                    { text: "“I could have found them myself. You didn’t have to go out of your way to borrow them.”", outcome: "Being overly guarded pushed away a sincere gesture of kindness. Leo simply smiled, said it was no problem, and returned to his seat.", delta: { spark: -5, boundary: 5 } },
+                                    { text: "“You’re so helpful! Could you also help me format this report while you’re at it?”", outcome: "You treated his kindness as an entitlement and immediately asked for more. That can become a Red Flag on your side of a relationship, too.", delta: { spark: -10, boundary: -15 } }
+                                ]
+                            },
+                            {
+                                speaker: "Leo",
+                                role: "Year 2 Society Committee Member in Your Department",
+                                avatar: "👓",
+                                text: "“By the way, our society is having a welcome tea next Friday. If big crowds aren’t really your thing, you don’t have to stay late. Just let me know whenever you feel like leaving.”",
+                                subtext: "[Empathy and Respect for Social Energy] He notices that social situations may tire you out and offers you an easy way to leave before you even need to ask.",
+                                choices: [
+                                    { text: "“You remembered that I don’t really like noisy places. That means a lot!”", outcome: "Feeling genuinely seen and understood helped build trust between you.", delta: { spark: 15, boundary: 15 } },
+                                    { text: "“Sounds good. Let’s see how things go on the day!”", outcome: "The conversation stayed light and easy, and you agreed to meet at the tea gathering.", delta: { spark: 10, boundary: 10 } }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        id: 3,
+                        zoneName: "☕ Creative Café at Dusk",
+                        lighting: "cafe",
+                        questTitle: "Chapter 3: Head to the café marker and have a deeper afternoon conversation with Marcus",
+                        targetNpcId: "marcus",
+                        turns: [
+                            {
+                                speaker: "Marcus",
+                                role: "Year 3 Orientation Camp Group Leader",
+                                avatar: "🧑🏻‍🎓",
+                                text: "“Speaking of dating, all three of my exes were clingy and emotionally unstable. They were always asking where I was and who I was with. It was suffocating. You seem so easy-going, so you wouldn’t be the type to keep tabs on your boyfriend, right?”",
+                                subtext: "[Putting Down Exes and Setting Expectations in Advance] He labels all his exes as ‘crazy’ or ‘unstable’, then uses ‘you’re so understanding’ to discourage you from expressing reasonable needs for reassurance in the future.",
+                                flagChallenge: {
+                                    correct: "red",
+                                    explanation: "Be cautious when someone claims that all their exes were crazy. A mature person can reflect on their own part in past relationship problems. Praising you in advance for being ‘easy-going and never making a fuss’ may make you afraid to ask reasonable questions later, because you do not want to be labelled difficult."
+                                },
+                                choices: [
+                                    { text: "“Don’t worry! I hate controlling boyfriends. I’ll be super chill and independent!”", outcome: "Trying to prove that you are ‘better than his exes’, you gave up your right to express discomfort and ask for reasonable reassurance.", delta: { spark: 10, boundary: -20 } },
+                                    { text: "“Every relationship takes work. But I think it’s normal for couples to keep each other updated and talk about how they feel.”", outcome: "You expressed your boundary with emotional maturity. You did not join in criticising his exes, and you calmly explained that reassurance and communication matter to you.", delta: { spark: 0, boundary: 20 } },
+                                    { text: "“Could it be that you didn’t give them enough reassurance?”", outcome: "That question hit a nerve. Marcus looked uncomfortable and quickly changed the subject, saying you were being too serious.", delta: { spark: -15, boundary: 10 } }
+                                ]
+                            },
+                            {
+                                speaker: "Marcus",
+                                role: "Year 3 Orientation Camp Group Leader",
+                                avatar: "🧑🏻‍🎓",
+                                text: "“Come on, let’s not ruin the mood with all that. I paid for the coffee earlier. Why don’t we go watch a movie at the studio I rent nearby? I promise I won’t do anything. Trust me!”",
+                                subtext: "[Testing Private-Space Boundaries] He uses the fact that he paid for your coffee to create a sense of obligation, then promises ‘nothing will happen’ to persuade you to enter a private space.",
+                                choices: [
+                                    { text: "“I’ll transfer you the money for the coffee. Let’s watch a movie at a cinema another day. I need to get back to my dorm and study tonight.”", outcome: "You protected both your financial and personal-space boundaries. You do not owe him anything, and you do not have to risk your safety to avoid awkwardness.", delta: { spark: -5, boundary: 20 } },
+                                    { text: "“Well, since you promised, I guess sitting there for half an hour wouldn’t hurt…”", outcome: "You entered a private space because you felt awkward saying no. The atmosphere became uncomfortable, and you spent the whole time feeling tense and uneasy.", delta: { spark: 5, boundary: -20 } }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        id: 4,
+                        zoneName: "📚 Library Study Corner (Midterm Week)",
+                        lighting: "library",
+                        questTitle: "Chapter 4: Return to the library during midterm deadline week and face a storm of messages",
+                        targetNpcId: "marcus",
+                        turns: [
+                            {
+                                speaker: "Marcus (voice call / confronting you in person)",
+                                role: "Year 3 Orientation Camp Group Leader",
+                                avatar: "🧑🏻‍🎓",
+                                text: "“You’ve been so slow to reply these past two days because of midterms! Do you think I’m annoying? Fine, I just won’t contact you anymore so I don’t get in the way of your studies!”",
+                                subtext: "[Passive-Aggressive Behaviour and Emotional Blackmail] He interprets your normal academic workload as rejection and threatens to stop contacting you, hoping you will abandon your report to comfort him.",
